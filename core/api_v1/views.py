@@ -7,6 +7,8 @@ from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIV
 from .models import Theme, Brand, Kit, Review
 from .serializers import ThemeSerializer, BrandSerializer, KitSerializer, ReviewSerializer
 
+from django_filters.rest_framework import DjangoFilterBackend
+
 
 @api_view(['GET', 'POST'])
 def theme_list(request):
@@ -16,13 +18,14 @@ def theme_list(request):
         return Response(serializer.data)
     
     elif request.method == 'POST':
-        serializer = ThemeSerializer(data=request.data)
+        is_many = isinstance(request.data, list)
+        serializer = ThemeSerializer(data=request.data, many=is_many)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['GET', 'DELETE'])
+@api_view(['GET', 'DELETE', 'PATCH'])
 def theme_detail(request, pk):
     try:
         theme = Theme.objects.get(pk=pk)
@@ -33,6 +36,13 @@ def theme_detail(request, pk):
         serializer = ThemeSerializer(theme)
         return Response(serializer.data)
     
+    elif request.method == 'PATCH':
+        serializer = ThemeSerializer(theme, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
     elif request.method == 'DELETE':
         theme.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -40,35 +50,96 @@ def theme_detail(request, pk):
 class KitListCreateView(ListCreateAPIView):
     queryset = Kit.objects.all()
     serializer_class = KitSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['theme', 'release_year']
+
+    def post(self, request):
+        is_many = isinstance(request.data, list)
+        serializer = KitSerializer(data=request.data, many=is_many)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class KitDetailView(RetrieveUpdateDestroyAPIView):
-    queryset = Kit.objects.all()
-    serializer_class = KitSerializer
-
-
-# class BrandView(APIView):
-#     def get(self, request):
-#         brand = Brand.objects.all()
-#         serializer = BrandSerializer(brand, many=True)
-#         return Response(serializer.data)
+class KitDetailView(APIView):
     
-#     def post(self, request):
-#         serializer = BrandSerializer(data=request.data)
-#         if serializer.is_valid():
-#             serializer.save()
-#             return Response(serializer.data, status=status.HTTP_201_CREATED)
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def get(self, request, pk):
+        try:
+            kit = Kit.objects.get(pk=pk)
+            serializer = KitSerializer(kit)
+            return Response(serializer.data)
+        except Kit.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        
+    def patch(self, request, pk):
+        try:
+            kit = Kit.objects.get(pk=pk)
+            serializer = KitSerializer(kit, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Kit.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
-class BrandListCreateView(ListCreateAPIView):
-    queryset = Brand.objects.all()
-    serializer_class = BrandSerializer
+    def delete(self, request, pk):
+        try:
+            kit = Kit.objects.get(pk=pk)
+            kit.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Kit.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
 
-class BrandDetailView(RetrieveUpdateDestroyAPIView):
-    queryset = Brand.objects.all()
-    serializer_class = BrandSerializer
+class BrandListCreateView(APIView):
+
+    def get(self, request, name=None):
+        if name:
+            brand = Brand.objects.filter(name=name)
+        else:
+            brand = Brand.objects.all()
+        serializer = BrandSerializer(brand, many=True)
+        return Response(serializer.data)
     
+    def post(self, request):
+        is_many = isinstance(request.data, list)
+        serializer = BrandSerializer(data=request.data, many=is_many)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class BrandDetailView(APIView):
+
+    def get(self, request, pk):
+        try:
+            brand = Brand.objects.get(pk=pk)
+            serializer = BrandSerializer(brand)
+            return Response(serializer.data)
+        except Brand.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        
+    def patch(self, request, pk):
+        try:
+            brand = Brand.objects.get(pk=pk)
+            serializer = BrandSerializer(brand, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Brand.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+    def delete(self, request, pk):
+        try:
+            brand = Brand.objects.get(pk=pk)
+            brand.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Brand.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+    
+
 class ReviewList(APIView):
     def get(self, request, kit_id=None):
         if kit_id:
@@ -79,7 +150,8 @@ class ReviewList(APIView):
         return Response(serializer.data)
     
     def post(self, request):
-        serializer = ReviewSerializer(data=request.data)
+        is_many = isinstance(request.data, list)
+        serializer = ReviewSerializer(data=request.data, many=is_many)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -87,6 +159,26 @@ class ReviewList(APIView):
     
 
 class ReviewDetail(APIView):
+
+    def get(self, request, pk):
+        try:
+            review = Review.objects.get(pk=pk)
+            serializer = ReviewSerializer(review)
+            return Response(serializer.data)
+        except Review.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        
+    def patch(self, request, pk):
+        try:
+            review = Review.objects.get(pk=pk)
+            serializer = ReviewSerializer(review, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Review.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
     def delete(self, request, pk):
         try:
             review = Review.objects.get(pk=pk)
